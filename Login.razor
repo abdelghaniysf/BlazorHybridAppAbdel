@@ -1,0 +1,152 @@
+﻿@page "/login"
+@using System.IO
+@using System.Text.Json
+@using Microsoft.Extensions.DependencyInjection
+@inject NavigationManager Navigation
+
+
+<h3>Login</h3>
+<h6>Ejemplo simple de cómo sería un login (funcional pero no muy estético) que se guarda en un archivo local JSON</h6>
+<br>
+<input placeholder="Nombre de usuario" @bind="username" />
+<input placeholder="Contraseña" type="password" @bind="password" />
+<br>
+<br>
+<button @onclick="login" class="btn btn-primary">Iniciar sesión</button>
+<button @onclick="CreateAccount" class="btn btn-secondary">Crear cuenta</button>
+<button @onclick="ShowUserList" class="btn btn-info">Mostrar lista de usuarios</button>
+<p>@loginResult</p>
+<ul>
+    @foreach (var user in userList)
+    {
+        <li>
+            @user
+            <button @onclick="() => DeleteUser(user)" class="btn btn-danger btn-sm">Eliminar</button>
+        </li>
+    }
+</ul>
+
+@code {
+    private string username;
+    private string password;
+    private string loginResult;
+    private List<string> userList = new List<string>();
+
+    private async Task login()
+    {
+        var path = Path.Combine(FileSystem.AppDataDirectory, "users.json");
+        if (!File.Exists(path))
+        {
+            loginResult = "Error: Archivo de usuarios no encontrado";
+            return;
+        }
+
+        var contents = File.ReadAllText(path);
+        var users = JsonSerializer.Deserialize<List<User>>(contents);
+
+        var user = users.FirstOrDefault(u => u.Username == username && u.Password == password);
+
+        if (user != null)
+        {
+            Navigation.NavigateTo("/logged-success");
+        }
+        else
+        {
+            loginResult = "Credenciales incorrectas";
+        }
+    }
+
+    private async Task CreateAccount()
+    {
+        var path = Path.Combine(FileSystem.AppDataDirectory, "users.json");
+        List<User> users;
+
+        if (File.Exists(path))
+        {
+            var contents = File.ReadAllText(path);
+            users = JsonSerializer.Deserialize<List<User>>(contents);
+        }
+        else
+        {
+            users = new List<User>();
+        }
+
+        var isUsernameEmpty = string.IsNullOrWhiteSpace(username);
+        var isPasswordEmpty = string.IsNullOrWhiteSpace(password);
+
+        if (isUsernameEmpty || isPasswordEmpty)
+        {
+            loginResult = "El nombre de usuario y la contraseña no pueden estar vacíos";
+            return;
+        }
+
+        var existingUser = users.FirstOrDefault(u => u.Username == username);
+
+        if (existingUser != null)
+        {
+            loginResult = "El nombre de usuario ya existe";
+            return;
+        }
+
+        var newUser = new User { Username = username, Password = password };
+        users.Add(newUser);
+
+        var serializedUsers = JsonSerializer.Serialize(users);
+        File.WriteAllText(path, serializedUsers);
+
+        loginResult = "Cuenta creada exitosamente";
+    }
+
+    private void ShowUserList()
+    {
+        var path = Path.Combine(FileSystem.AppDataDirectory, "users.json");
+
+        if (File.Exists(path))
+        {
+            var contents = File.ReadAllText(path);
+            var users = JsonSerializer.Deserialize<List<User>>(contents);
+            userList = users.Select(u => u.Username).ToList();
+        }
+        else
+        {
+            loginResult = "Error: Archivo de usuarios no encontrado";
+        }
+    }
+
+    private void DeleteUser(string usernameToDelete)
+    {
+        var path = Path.Combine(FileSystem.AppDataDirectory, "users.json");
+
+        if (!File.Exists(path))
+        {
+            loginResult = "Error: Archivo de usuarios no encontrado";
+        }
+        else
+        {
+            var contents = File.ReadAllText(path);
+            var users = JsonSerializer.Deserialize<List<User>>(contents);
+
+            var userToDelete = users.FirstOrDefault(u => u.Username == usernameToDelete);
+            if (userToDelete != null)
+            {
+                users.Remove(userToDelete);
+
+                var serializedUsers = JsonSerializer.Serialize(users);
+                File.WriteAllText(path, serializedUsers);
+
+                loginResult = $"Usuario '{usernameToDelete}' eliminado correctamente";
+                userList = users.Select(u => u.Username).ToList();
+            }
+            else
+            {
+                loginResult = $"Usuario '{usernameToDelete}' no encontrado";
+            }
+        }
+    }
+
+    public class User
+    {
+        public string Username { get; set; }
+        public string Password { get; set; }
+    }
+}
